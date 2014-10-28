@@ -55,6 +55,6 @@ class MessagePage(webapp2.RequestHandler):
       channel.send_message(to_user, self.request.body)
     else:
       logging.info('User not found')
-      channel.send_message(from_user, '{"ERROR":"User not found"}')
+      channel.send_message(from_user, '{"ERROR":"User not found ' + to_user + '"}')
 
 app = webapp2.WSGIApplication([('/', MainPage), ('/message', MessagePage), ('/_ah/channel/connected/', ConnectPage), ('/_ah/channel/disconnected/', DisconnectPage)], debug=True)

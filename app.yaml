@@ -1,4 +1,4 @@
-application: twilio-channel
+application: webrtc-p2p
 version: 1
 runtime: python27
 threadsafe: true

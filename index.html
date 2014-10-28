@@ -14,6 +14,7 @@
     <script type="text/javascript">
       var channelToken = "{{ token }}";
       var user = "{{ user }}";
+      var connected = false
       var localStream = null;
       var peerConnection = null;
       var peer = null;
@@ -41,16 +42,19 @@
       }
 
       function connect() {
-        channel = new goog.appengine.Channel('{{ token }}');
-        socket = channel.open();
+        var channel = new goog.appengine.Channel('{{ token }}');
+        var socket = channel.open();
         socket.onopen = function() {
-          status("Channel opened\n");
+          status("Channel connected\n");
+          connected = true;
         }
         socket.onerror = function() {
           status("Channel error\n");
+          connected = false;
         }
         socket.onclose = function() {
           status("Channel closed\n");
+          connected = false;
         }
         socket.onmessage = function(message) {
           status("Channel message: " + message.data + "\n");
@@ -86,7 +90,7 @@
             status("Received HANGUP\n");
             doHangup();
           } else if (message.ERROR) {
-            status("Received ERROR: " + message.ERROR);
+            status("Received ERROR: " + message.ERROR + "\n");
             doHangup()
           }
         }
@@ -103,6 +107,7 @@
         peerConnection = new webkitRTCPeerConnection({ iceServers: [] });
         peerConnection.addStream(localStream);
         peerConnection.onaddstream = function(event) {
+          status("Attaching remote stream\n");
           if (typeof video.srcObject !== 'undefined') {
             video.srcObject = event.stream;
           } else if (typeof video.mozSrcObject !== 'undefined') {
@@ -110,7 +115,7 @@
           } else if (typeof video.src !== 'undefined') {
             video.src = URL.createObjectURL(event.stream);
           } else {
-            status('Error attaching stream.');
+            status("Error attaching stream\n");
           }
         }
         peerConnection.onicecandidate = function (candidate) {
@@ -122,6 +127,11 @@
             }
           }
         }
+        peerConnection.oniceconnectionstatechange = function() {
+          if (peerConnection) {
+            status("ICE state: " + peerConnection.iceConnectionState + "\n");
+          }
+        }
      }
 
      function sendIceCandidate(candidate) {
@@ -130,11 +140,17 @@
       }
 
       function call() {
+        if (!connected) {
+          status("Please connect\n")
+          return;
+        }
         peer = document.getElementById("peerName").value
         if (!peer.length) {
           status("Please specify peer name\n");
           return;
         }
+
+        status("Making call\n");
 
         getMedia(call2);
       }
@@ -195,11 +211,15 @@
       }
 
       function hangup() {
-        status("Hanging up");
-        var message =  '{"HANGUP":{ "to":"' + peer + '", "from":"' + user + '"}}';
-        sendMessage(message);
+        if (peerConnection) {
+          status("Hanging up\n");
+          var message =  '{"HANGUP":{ "to":"' + peer + '", "from":"' + user + '"}}';
+          sendMessage(message);
 
-        doHangup();
+          doHangup();
+        } else {
+          status("Not in a call\n");
+        }
       }
 
       doHangup = function() {
@@ -223,7 +243,7 @@
   
     <h1>Twilio WebRTC Peer-to-Peer Sample</h1>
     <label>User: {{ user }}</label>
-     <button onclick="connect()">Connect</button>
+    <button onclick="connect()">Connect</button>
 
     </p>
     <label>Peer:</label>
@@ -234,6 +254,6 @@
     </p>
     <button onclick="clearStatus()">Clear</button>
     </p>
-    <textarea rows="20" cols="100" id="statusArea" readonly></textarea>
+    <textarea rows="30" cols="100" id="statusArea" readonly></textarea>
   </body>
 </html>
