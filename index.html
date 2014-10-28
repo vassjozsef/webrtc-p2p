@@ -1,0 +1,239 @@
+<html>
+  <head>
+    <title>Twilio WebRTC Peer-to-Peer Sample </title>
+
+    <style>
+      textarea{resize:none}
+    </style>
+
+  </head>
+  
+  <body>
+    <script type="text/javascript" src="/_ah/channel/jsapi"></script>
+
+    <script type="text/javascript">
+      var channelToken = "{{ token }}";
+      var user = "{{ user }}";
+      var localStream = null;
+      var peerConnection = null;
+      var peer = null;
+      var iceCandidates = [];
+      var canSendIceCandidate = false; 
+      var video = typeof document !== 'undefined' && document.createElement("video");
+      video.autoplay = "autoplay";
+      
+      function clearStatus() {
+        textarea = document.getElementById("statusArea");
+        textarea.innerHTML = "";
+      }
+
+      function status(msg) {
+         textarea = document.getElementById("statusArea");
+         textarea.innerHTML += msg;
+         console.log(msg);
+      }
+
+      function getMedia(successCallback) {
+        var constraints = { audio:true }
+        navigator.webkitGetUserMedia(constraints, successCallback, function(error) {
+          status("Error while accessing microphone: " + error.name + "\n");
+        });
+      }
+
+      function connect() {
+        channel = new goog.appengine.Channel('{{ token }}');
+        socket = channel.open();
+        socket.onopen = function() {
+          status("Channel opened\n");
+        }
+        socket.onerror = function() {
+          status("Channel error\n");
+        }
+        socket.onclose = function() {
+          status("Channel closed\n");
+        }
+        socket.onmessage = function(message) {
+          status("Channel message: " + message.data + "\n");
+        }
+        socket.onmessage = function(message) {
+          var message = JSON.parse(message.data);
+          if (message.INVITE) {
+            peer = message.INVITE.from;
+            canSendIceCandidate = true;
+            status("Received call from: " + peer + "\n");
+            getMedia(function(stream) {
+              localStream = stream;
+              answerCall(message.INVITE.sdp);
+            });
+          } else if (message.INVITE_RESPONSE) {
+            status("Call accepted\n")
+            // send queued ice candidates
+            canSendIceCandidate = true;
+            for (i = 0; i < iceCandidates.length; i++) {
+              sendIceCandidate(iceCandidates[i]);
+            }
+            peerConnection.setRemoteDescription(new RTCSessionDescription({sdp: message.INVITE_RESPONSE.sdp, type:"answer"}), function() {}, function(error) {
+             status("Failed to set remote description\n");
+          });
+          } else if (message.ICE) {
+            status("Received ICE candidate: " + message.ICE.candidate + "\n");
+            if (peerConnection) {
+              peerConnection.addIceCandidate(new RTCIceCandidate({sdpMLineIndex: message.ICE.sdpMLineIndex, candidate: message.ICE.candidate}));
+            } else {
+              status("Cannot set remote ICE candidate\n");
+            }
+          } else if (message.HANGUP) {
+            status("Received HANGUP\n");
+            doHangup();
+          } else if (message.ERROR) {
+            status("Received ERROR: " + message.ERROR);
+            doHangup()
+          }
+        }
+      }
+
+      function sendMessage(message) {
+        var path = "/message";
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', path, true);
+        xhr.send(message);
+      }
+
+      function createPeerConnection() {
+        peerConnection = new webkitRTCPeerConnection({ iceServers: [] });
+        peerConnection.addStream(localStream);
+        peerConnection.onaddstream = function(event) {
+          if (typeof video.srcObject !== 'undefined') {
+            video.srcObject = event.stream;
+          } else if (typeof video.mozSrcObject !== 'undefined') {
+            video.mozSrcObject = event.stream;
+          } else if (typeof video.src !== 'undefined') {
+            video.src = URL.createObjectURL(event.stream);
+          } else {
+            status('Error attaching stream.');
+          }
+        }
+        peerConnection.onicecandidate = function (candidate) {
+          if (candidate.candidate) {
+            if (canSendIceCandidate) {
+              sendIceCandidate(candidate);
+            } else {
+              iceCandidates[iceCandidates.length] = candidate;
+            }
+          }
+        }
+     }
+
+     function sendIceCandidate(candidate) {
+       var message = '{"ICE":{ "to":"' + peer + '", "from":"' + user + '", "sdpMid":"' + candidate.candidate.sdpMid + '", "sdpMLineIndex":' + candidate.candidate.sdpMLineIndex + ', "candidate":"' + candidate.candidate.candidate + '"}}';
+       sendMessage(message);
+      }
+
+      function call() {
+        peer = document.getElementById("peerName").value
+        if (!peer.length) {
+          status("Please specify peer name\n");
+          return;
+        }
+
+        getMedia(call2);
+      }
+
+      function call2(stream) {
+        localStream = stream;
+
+        createPeerConnection();
+
+        var constraints = { audio:true }
+        peerConnection.createOffer(function(desc) {
+           peerConnection.setLocalDescription(new RTCSessionDescription(desc), sendInvite, function(error) {
+          status("Failed to set local description\n");
+        })
+        }, function (err) {
+          status("Failed to create offer\n");
+        }, constraints);
+      }
+
+      function answerCall(sdp) {
+
+        createPeerConnection();
+
+        var constraints = { };
+        peerConnection.setRemoteDescription(new RTCSessionDescription({ sdp: sdp, type: "offer"}), function() {
+          peerConnection.createAnswer(function(desc) {
+          peerConnection.setLocalDescription(new RTCSessionDescription(desc), sendInviteResponse, function(error) {
+          status("Failed to set local description\n");
+        });
+        }, function (error) {
+          status("Failed to create answer\n");
+        }, constraints);
+        }, function(error) {
+          status("Failed to set remote description\n");
+        });
+      }
+
+      function escape(str) {
+        return str
+          .replace(/[\\]/g, '\\\\')
+          .replace(/[\"]/g, '\\\"')
+          .replace(/[\/]/g, '\\/')
+          .replace(/[\b]/g, '\\b')
+          .replace(/[\f]/g, '\\f')
+          .replace(/[\n]/g, '\\n')
+          .replace(/[\r]/g, '\\r')
+          .replace(/[\t]/g, '\\t');
+      }
+
+      function sendInvite() {
+        var message = '{"INVITE":{ "to":"' + peer + '", "from":"' + user + '", "sdp":"' + escape(peerConnection.localDescription.sdp) + '"}}';
+        sendMessage(message);
+      }
+
+      function sendInviteResponse() {
+        var message = '{"INVITE_RESPONSE":{ "to":"' + peer + '", "from":"' + user + '", "sdp":"' + escape(peerConnection.localDescription.sdp) + '"}}';
+        sendMessage(message);
+      }
+
+      function hangup() {
+        status("Hanging up");
+        var message =  '{"HANGUP":{ "to":"' + peer + '", "from":"' + user + '"}}';
+        sendMessage(message);
+
+        doHangup();
+      }
+
+      doHangup = function() {
+
+        if (peerConnection) {
+          peerConnection.close();
+          peerConnection = null;
+        }
+
+        if (localStream) {
+          localStream.stop();
+          localStream = null;
+        }
+
+        peer = null;
+        canSendIceCandidate = false;
+        iceCandidates = [];
+      }
+
+    </script>
+  
+    <h1>Twilio WebRTC Peer-to-Peer Sample</h1>
+    <label>User: {{ user }}</label>
+     <button onclick="connect()">Connect</button>
+
+    </p>
+    <label>Peer:</label>
+    <input type="text" id="peerName"/>
+    <button onclick="call()">Call</button>
+    <button onclick="hangup()">Hangup</button> 
+
+    </p>
+    <button onclick="clearStatus()">Clear</button>
+    </p>
+    <textarea rows="20" cols="100" id="statusArea" readonly></textarea>
+  </body>
+</html>
