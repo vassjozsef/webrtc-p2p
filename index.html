@@ -35,10 +35,14 @@
       }
 
       function getMedia(successCallback) {
-        var constraints = { audio:true }
-        navigator.webkitGetUserMedia(constraints, successCallback, function(error) {
-          status("Error while accessing microphone: " + error.name + "\n");
-        });
+        if (localStream) {
+          successCallback(localStream);
+        } else {
+          var constraints = { audio:true }
+          navigator.webkitGetUserMedia(constraints, successCallback, function(error) {
+            status("Error while accessing microphone: " + error.name + "\n");
+          });
+        }
       }
 
       function connect() {
@@ -229,7 +233,8 @@
           peerConnection = null;
         }
 
-        if (localStream) {
+        reuseMedia = document.getElementById("reuseMedia").checked;
+        if (localStream && !reuseMedia) {
           localStream.stop();
           localStream = null;
         }
@@ -245,15 +250,16 @@
     <label>User: {{ user }}</label>
     <button onclick="connect()">Connect</button>
 
-    </p>
-    <label>Peer:</label>
-    <input type="text" id="peerName"/>
-    <button onclick="call()">Call</button>
-    <button onclick="hangup()">Hangup</button> 
+    <p><input type=checkbox id="reuseMedia"/>Reuse local audio stream</p>
 
+    <p> 
+      <label>Peer:</label>
+      <input type="text" id="peerName"/>
+      <button onclick="call()">Call</button>
+      <button onclick="hangup()">Hangup</button> 
     </p>
-    <button onclick="clearStatus()">Clear</button>
-    </p>
-    <textarea rows="30" cols="100" id="statusArea" readonly></textarea>
+
+    <p><button onclick="clearStatus()">Clear</button></p>
+    <p><textarea rows="30" cols="100" id="statusArea" readonly></textarea></p>
   </body>
 </html>
