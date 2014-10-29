@@ -160,7 +160,7 @@
 
         createPeerConnection();
 
-        var constraints = { audio:true }
+        var constraints =  { 'mandatory': { 'OfferToReceiveAudio': true, 'OfferToReceiveVideo': false } };
         peerConnection.createOffer(function(desc) {
            peerConnection.setLocalDescription(new RTCSessionDescription(desc), sendInvite, function(error) {
           status("Failed to set local description\n");
@@ -174,7 +174,7 @@
 
         createPeerConnection();
 
-        var constraints = { };
+        var constraints =  { 'mandatory': { 'OfferToReceiveAudio': true, 'OfferToReceiveVideo': false } };
         peerConnection.setRemoteDescription(new RTCSessionDescription({ sdp: sdp, type: "offer"}), function() {
           peerConnection.createAnswer(function(desc) {
           peerConnection.setLocalDescription(new RTCSessionDescription(desc), sendInviteResponse, function(error) {
