@@ -192,25 +192,13 @@
         });
       }
 
-      function escape(str) {
-        return str
-          .replace(/[\\]/g, '\\\\')
-          .replace(/[\"]/g, '\\\"')
-          .replace(/[\/]/g, '\\/')
-          .replace(/[\b]/g, '\\b')
-          .replace(/[\f]/g, '\\f')
-          .replace(/[\n]/g, '\\n')
-          .replace(/[\r]/g, '\\r')
-          .replace(/[\t]/g, '\\t');
-      }
-
       function sendInvite() {
-        var message = '{"INVITE":{ "to":"' + peer + '", "from":"' + user + '", "sdp":"' + escape(peerConnection.localDescription.sdp) + '"}}';
+        var message = '{"INVITE":{ "to":"' + peer + '", "from":"' + user + '", "sdp":' + JSON.stringify(peerConnection.localDescription.sdp) + '}}';
         sendMessage(message);
       }
 
       function sendInviteResponse() {
-        var message = '{"INVITE_RESPONSE":{ "to":"' + peer + '", "from":"' + user + '", "sdp":"' + escape(peerConnection.localDescription.sdp) + '"}}';
+        var message = '{"INVITE_RESPONSE":{ "to":"' + peer + '", "from":"' + user + '", "sdp":' + JSON.stringify(peerConnection.localDescription.sdp) + '}}';
         sendMessage(message);
       }
 
