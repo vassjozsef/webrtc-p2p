@@ -20,6 +20,7 @@
       var peer = null;
       var iceCandidates = [];
       var canSendIceCandidate = false; 
+      var statisticsInterval = null;
       var video = typeof document !== 'undefined' && document.createElement("video");
       video.autoplay = "autoplay";
       
@@ -136,6 +137,35 @@
             status("ICE state: " + peerConnection.iceConnectionState + "\n");
           }
         }
+
+        statisticsInterval = setInterval(getStatistics, 1000);
+      }
+
+     function getStatistics() {
+        if (peerConnection) {
+          peerConnection.getStats(processStatistics, function(error) {
+            status("Statistcs error\n");
+          });
+       }
+     }
+
+     function processStatistics(statistics) {
+       var statisticsArea = document.getElementById("statisticsArea");
+       var result = "";
+       for (var i = 0; i < statistics.result().length; i++) {
+         var res = statistics.result()[i];
+         if (res.type == "ssrc") {
+           for (var j = 0; j < res.names().length; j++) {
+             var item = res.names()[j];
+             if (item == "audioInputLevel"
+               || item == "packetsSent"
+               || item == "bytesSent") {
+               result += item + ": " + res.stat(item) + "\n";
+               statisticsArea.innerHTML = result;
+             }
+           }
+         }
+       }
      }
 
      function sendIceCandidate(candidate) {
@@ -160,6 +190,11 @@
       }
 
       function call2(stream) {
+        var audioTracks = stream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          status('Using Audio device: ' + audioTracks[0].label + "\n");
+        }
+
         localStream = stream;
 
         createPeerConnection();
@@ -216,6 +251,8 @@
 
       doHangup = function() {
 
+        clearInterval(statisticsInterval);
+
         if (peerConnection) {
           peerConnection.close();
           peerConnection = null;
@@ -235,17 +272,27 @@
     </script>
   
     <h1>Twilio WebRTC Peer-to-Peer Sample</h1>
-    <label>User: {{ user }}</label>
-    <button onclick="connect()">Connect</button>
 
-    <p><input type=checkbox id="reuseMedia"/>Reuse local audio stream</p>
+    <table>
+      <tr>
+        <td width="412">
+          <label>User: {{ user }}</label>
+          <button onclick="connect()">Connect</button>
 
-    <p> 
-      <label>Peer:</label>
-      <input type="text" id="peerName"/>
-      <button onclick="call()">Call</button>
-      <button onclick="hangup()">Hangup</button> 
-    </p>
+          <p><input type=checkbox id="reuseMedia"/>Reuse local audio stream</p>
+
+          <p> 
+            <label>Peer:</label>
+            <input type="text" id="peerName"/>
+            <button onclick="call()">Call</button>
+            <button onclick="hangup()">Hangup</button> 
+          </p>
+        </td>
+        <td>
+          <textarea rows="7" cols="40" id="statisticsArea" readonly></textarea>
+        </td>
+      </tr> 
+    </table>
 
     <p><button onclick="clearStatus()">Clear</button></p>
     <p><textarea rows="30" cols="100" id="statusArea" readonly></textarea></p>
