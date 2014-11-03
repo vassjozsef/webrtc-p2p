@@ -68,11 +68,12 @@
           var message = JSON.parse(message.data);
           if (message.INVITE) {
             peer = message.INVITE.from;
+            callerSend = message.INVITE.callerSend;
             canSendIceCandidate = true;
-            status("Received call from: " + peer + "\n");
+            status("Received call from: " + peer + ", send audio: " + !callerSend + "\n");
             getMedia(function(stream) {
               localStream = stream;
-              answerCall(message.INVITE.sdp);
+              answerCall(!callerSend, message.INVITE.sdp);
             });
           } else if (message.INVITE_RESPONSE) {
             status("Call accepted\n")
@@ -108,19 +109,23 @@
         xhr.send(message);
       }
 
-      function createPeerConnection() {
+      function createPeerConnection(sender, receiver) {
         peerConnection = new webkitRTCPeerConnection({ iceServers: [] });
-        peerConnection.addStream(localStream);
-        peerConnection.onaddstream = function(event) {
-          status("Attaching remote stream\n");
-          if (typeof video.srcObject !== 'undefined') {
-            video.srcObject = event.stream;
-          } else if (typeof video.mozSrcObject !== 'undefined') {
-            video.mozSrcObject = event.stream;
-          } else if (typeof video.src !== 'undefined') {
-            video.src = URL.createObjectURL(event.stream);
-          } else {
-            status("Error attaching stream\n");
+        if (sender) {
+          peerConnection.addStream(localStream);
+        }
+        if (receiver) {
+          peerConnection.onaddstream = function(event) {
+            status("Attaching remote stream\n");
+            if (typeof video.srcObject !== 'undefined') {
+              video.srcObject = event.stream;
+            } else if (typeof video.mozSrcObject !== 'undefined') {
+              video.mozSrcObject = event.stream;
+            } else if (typeof video.src !== 'undefined') {
+              video.src = URL.createObjectURL(event.stream);
+            } else {
+              status("Error attaching stream\n");
+            }
           }
         }
         peerConnection.onicecandidate = function (candidate) {
@@ -151,7 +156,7 @@
 
      function processStatistics(statistics) {
        var statisticsArea = document.getElementById("statisticsArea");
-       var result = "";
+       var result = "Sender statistics:\n";
        for (var i = 0; i < statistics.result().length; i++) {
          var res = statistics.result()[i];
          if (res.type == "ssrc") {
@@ -166,6 +171,11 @@
            }
          }
        }
+     }
+
+     function clearStatistics() {
+       var statisticsArea = document.getElementById("statisticsArea");
+       stataticsArea = "Sender statistics:\naudioInputLevel: 0\npacketsSent: 0\nbytesSent: 0";
      }
 
      function sendIceCandidate(candidate) {
@@ -195,9 +205,13 @@
           status('Using Audio device: ' + audioTracks[0].label + "\n");
         }
 
+        clearStatistics();
+
         localStream = stream;
 
-        createPeerConnection();
+        var callerSend = document.getElementById("callerSend").checked;
+
+        createPeerConnection(true, !callerSend);
 
         var constraints =  { 'mandatory': { 'OfferToReceiveAudio': true, 'OfferToReceiveVideo': false } };
         peerConnection.createOffer(function(desc) {
@@ -209,9 +223,11 @@
         }, constraints);
       }
 
-      function answerCall(sdp) {
+      function answerCall(sendMedia, sdp) {
 
-        createPeerConnection();
+        clearStatistics();
+
+        createPeerConnection(sendMedia, true);
 
         var constraints =  { 'mandatory': { 'OfferToReceiveAudio': true, 'OfferToReceiveVideo': false } };
         peerConnection.setRemoteDescription(new RTCSessionDescription({ sdp: sdp, type: "offer"}), function() {
@@ -228,7 +244,8 @@
       }
 
       function sendInvite() {
-        var message = '{"INVITE":{ "to":"' + peer + '", "from":"' + user + '", "sdp":' + JSON.stringify(peerConnection.localDescription.sdp) + '}}';
+        var callerSend = document.getElementById("callerSend").checked;
+        var message = '{"INVITE":{ "to":"' + peer + '", "from":"' + user + '", "callerSend":' + callerSend + ', "sdp":' + JSON.stringify(peerConnection.localDescription.sdp) + '}}';
         sendMessage(message);
       }
 
@@ -258,7 +275,7 @@
           peerConnection = null;
         }
 
-        reuseMedia = document.getElementById("reuseMedia").checked;
+        var reuseMedia = document.getElementById("reuseMedia").checked;
         if (localStream && !reuseMedia) {
           localStream.stop();
           localStream = null;
@@ -279,7 +296,10 @@
           <label>User: {{ user }}</label>
           <button onclick="connect()">Connect</button>
 
-          <p><input type=checkbox id="reuseMedia"/>Reuse local audio stream</p>
+          <p>
+            <input type=checkbox id="reuseMedia"/>Reuse local audio stream</br>
+            <input type=checkbox id="callerSend"/>Only caller sends audio</br>
+          </p>
 
           <p> 
             <label>Peer:</label>
@@ -289,7 +309,7 @@
           </p>
         </td>
         <td>
-          <textarea rows="7" cols="40" id="statisticsArea" readonly></textarea>
+          <textarea rows="8" cols="40" id="statisticsArea" readonly></textarea>
         </td>
       </tr> 
     </table>
